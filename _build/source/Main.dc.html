@@ -665,7 +665,7 @@ if (document.readyState === 'complete') idle(go); else window.addEventListener('
 startMascot() {
 const vw = window.innerWidth || 1200;
 import('./mascote.js').then((m) => m.start({
-model: new URL('./assets/SHADOW.glb', document.baseURI).href,
+model: new URL('./assets/MESTRE.glb', document.baseURI).href,
 height: vw < 640 ? 150 : 210,
 zIndex: 18,
 menu: false,
@@ -677,10 +677,12 @@ onThrow: () => this.say('Ninguém me controla. Só eu mesmo.', true)
 })).then((sh) => {
 this._mas = sh;
 this._wel = { getBoundingClientRect: () => { const r = sh.rect(); return r || { left: -999, right: -999, top: -999, bottom: -999, width: 0, height: 0 }; } };
+import('./fisica.js').then((f) => { this._fx = f.iniciarFisica(sh); window.__mestreFx = this._fx; }).catch(() => {});
 setTimeout(() => this.say('Psiu… estou de olho em você.', true), 3200);
 }).catch((err) => { try { console.warn('Mascote indisponível:', err); } catch (e) {} });
 }
 onMascot(n) {
+if (this._fx) this._fx.anim(n);
 if (n === 'Emote_Point') this.say('Está esperando o quê para aproveitar os 75% de desconto?');
 else if (n === 'Emote_Crown') this.say('Lembre-se: nada ficará no nosso caminho.');
 else if (/^(Idle|Sit_Phone|Sad|Sit_Stretch|Sit_Swing|Shrug|Sleep_Wake)$/.test(n) && Math.random() < 0.3) this.say(this.nextPhrase());
@@ -782,9 +784,13 @@ const step = () => {
 this._praf = requestAnimationFrame(step);
 if (!visible || document.hidden) return;
 ctx.clearRect(0, 0, W, H);
+let gx = -9999, gy = -9999;
+if (this._wel) { const mr = this._wel.getBoundingClientRect(), cr = c.getBoundingClientRect(); if (mr.width) { gx = (mr.left + mr.right) / 2 - cr.left; gy = (mr.top + mr.bottom) / 2 - cr.top; } }
 for (const p of ps) {
 const dx = p.x - mx, dy = p.y - my, d2 = dx * dx + dy * dy;
 if (d2 < 12000) { const f = (12000 - d2) / 12000 * 0.9; p.x += dx / Math.sqrt(d2 + 1) * f; p.y += dy / Math.sqrt(d2 + 1) * f; }
+const ex = p.x - gx, ey = p.y - gy, e2 = ex * ex + ey * ey;
+if (e2 < 22000) { const f = (22000 - e2) / 22000 * 1.4; p.x += ex / Math.sqrt(e2 + 1) * f; p.y += ey / Math.sqrt(e2 + 1) * f; }
 p.x += p.vx; p.y += p.vy; p.tw += 0.04;
 if (p.y < -10 || p.x < -10 || p.x > W + 10) Object.assign(p, make(H + 10));
 const al = p.a * (0.6 + 0.4 * Math.sin(p.tw));

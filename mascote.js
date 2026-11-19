@@ -152,17 +152,21 @@ export class Shimeji {
 
     const meshes = [];
     this.model.traverse((n) => { if (n.isMesh) meshes.push(n); });
-    for (const m of meshes) {
-      m.frustumCulled = false;
-      const name = m.material?.name || '';
-      let mat = null, noOutline = false;
-      if (name.startsWith('M_Neon')) { mat = unlit('#ff2417'); this.neon.push(mat); }
-      else if (name === 'M_FX_Neon' || name === 'M_Phone_Screen') mat = unlit('#ff2417');
-      else if (name === 'M_FX_Fire') mat = unlit('#ff7a14');
-      else if (name === 'M_FX_Mist') mat = unlit('#ff1a12', { transparent: true, opacity: 0.75, depthWrite: false });
-      else if (name === 'M_FX_Smoke') mat = unlit('#5b5760', { transparent: true, opacity: 0.75, depthWrite: false });
-      if (mat) { m.material = mat; continue; }
-      let col = '#17171a', rim = 0.75;
+    // Texturas pintadas do corpo (modelo "volumes"): mantém o mapa original, com sombreamento em degraus
+    // e um pouco de emissão para o vermelho/rosto continuarem legíveis no escuro.
+    const textured = (src) => new THREE.MeshToonMaterial({
+      map: src.map, gradientMap: gradient, side: THREE.DoubleSide,
+      emissive: new THREE.Color(0xffffff), emissiveMap: src.map, emissiveIntensity: 0.55,
+    });
+    const styleOne = (src) => {
+      const name = src?.name || '';
+      if (name.startsWith('M_Char_') && src.map) return { mat: textured(src), noOutline: false };
+      if (name.startsWith('M_Neon')) { const m = unlit('#ff2417'); this.neon.push(m); return { mat: m, fx: true }; }
+      if (name === 'M_FX_Neon' || name === 'M_Phone_Screen') return { mat: unlit('#ff2417'), fx: true };
+      if (name === 'M_FX_Fire') return { mat: unlit('#ff7a14'), fx: true };
+      if (name === 'M_FX_Mist') return { mat: unlit('#ff1a12', { transparent: true, opacity: 0.75, depthWrite: false }), fx: true };
+      if (name === 'M_FX_Smoke') return { mat: unlit('#5b5760', { transparent: true, opacity: 0.75, depthWrite: false }), fx: true };
+      let col = '#17171a', rim = 0.75, noOutline = false;
       switch (name) {
         case 'M_Shoe_Sole': col = '#e6e4df'; break;
         case 'M_Shoe_Laces': col = '#cc0a0a'; break;
@@ -172,7 +176,15 @@ export class Shimeji {
         case 'M_Mask': col = '#0a0a0c'; rim = 0; noOutline = true; break;
         case 'M_Hood_Inner': col = '#000000'; rim = 0; noOutline = true; break;
       }
-      m.material = toon(col, rim);
+      return { mat: toon(col, rim), noOutline };
+    };
+    for (const m of meshes) {
+      m.frustumCulled = false;
+      const isArr = Array.isArray(m.material);
+      const res = (isArr ? m.material : [m.material]).map(styleOne);
+      m.material = isArr ? res.map((r) => r.mat) : res[0].mat;
+      if (res.every((r) => r.fx)) continue;
+      const noOutline = res.some((r) => r.noOutline);
       if (m.isSkinnedMesh && !noOutline) {
         const o = new THREE.SkinnedMesh(m.geometry, outlineMat);
         o.bind(m.skeleton, m.bindMatrix);

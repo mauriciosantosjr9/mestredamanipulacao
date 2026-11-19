@@ -6,7 +6,7 @@
 const rnd = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 const TEXT_SEL = 'h1 span, h2 span, .mm-neon, .mm-glitch';
-const OBJ_SEL = '.mm-chip, .mm-step-ic';
+const OBJ_SEL = '.mm-chip, .mm-step-ic, .mm-card svg, .mm-tt svg';
 const MOVING = new Set([1, 4, 6, 9, 10, 11, 13]); // andar, rastejar, pular, escalar, descer, teto, arrastar
 
 export function iniciarFisica(sh) {
@@ -256,6 +256,26 @@ export function iniciarFisica(sh) {
     }
   }
 
+
+  // Poleiro: quando ele senta num título, selo, ícone ou cartão, o que está embaixo reage ao pouso e aos pés balançando.
+  const groupsIn = (el) => groups.filter((g) => g.el === el || el.contains(g.el));
+  function stomp(el, power = 210) {
+    const m = sh.rect(); if (!m || paused() || destroyed) return;
+    const x = (m.left + m.right) / 2, reach = sh.ppm * 1.0;
+    for (const g of groupsIn(el)) {
+      for (const b of g.bodies) {
+        const d = Math.abs(center(b).x - x);
+        if (d > reach) continue;
+        later(() => { b.vy -= power * (1 - d / (reach * 1.15)) * rnd(0.8, 1.1); b.vr += rnd(-2, 2); wake(b); }, d * 0.7);
+      }
+    }
+  }
+  function perch(el) {
+    const m = sh.rect(); if (!m || paused() || destroyed) return;
+    const r = el.getBoundingClientRect();
+    wave((m.left + m.right) / 2, r.top + 6, 620, 300, 800);
+    stomp(el, 330);
+  }
   // ---------------------------------------------------------------- o visitante também pode cutucar
   const onDown = (e) => {
     const t = e.target && e.target.closest && e.target.closest('.mm-fxl, .mm-chip, .mm-step-ic');
@@ -266,7 +286,7 @@ export function iniciarFisica(sh) {
   addEventListener('pointerdown', onDown, { passive: true });
 
   return {
-    anim, wave, _groups: groups,
+    anim, wave, perch, stomp,
     destroy() {
       destroyed = true;
       clearInterval(scanTimer); clearInterval(proxTimer); cancelAnimationFrame(raf);

@@ -6,9 +6,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const LEDGE = 0.33; // altura do "banquinho" em Sit_Swing (metros)
 const LOOPS = new Set(['Idle', 'Walk', 'Walk_Ceiling', 'Sit_Phone', 'Sad', 'Sit_Stretch', 'Sit_Swing',
   'Sleep', 'Crawl', 'Fall', 'Climb', 'Peek_R', 'Peek_L']);
+// Glitch e Sumir ficam de fora do sorteio: fazem o personagem piscar/desaparecer e parecem um defeito.
 const EMOTES = ['Emote_InLove', 'Emote_Heart', 'Emote_Celebrate', 'Emote_Angry', 'Emote_Steam',
   'Emote_Peace', 'Emote_Dab', 'Emote_Graffiti', 'Emote_Fire', 'Emote_Point', 'Emote_Scared',
-  'Emote_Crown', 'Emote_Glitch', 'VANISH'];
+  'Emote_Crown'];
 const S = { IDLE: 0, WALK: 1, ACT: 2, SLEEP: 3, CRAWL: 4, TRIP: 5, JUMP: 6, FALL: 7, LAND: 8, CLIMB: 9,
   DESCEND: 10, CEILING: 11, PEEK: 12, DRAG: 13, VANISH: 14, APPEAR: 15 };
 const GROUND_STATES = new Set([S.IDLE, S.WALK, S.ACT, S.SLEEP, S.CRAWL, S.TRIP, S.LAND, S.APPEAR, S.VANISH]);
@@ -144,7 +145,8 @@ export class Shimeji {
       }
       return m;
     };
-    const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+    // polygonOffset evita briga de profundidade (z-fighting) entre o contorno e o corpo, que aparecia como piscada
+    const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 });
     outlineMat.onBeforeCompile = (sh) => {
       sh.vertexShader = sh.vertexShader.replace('#include <skinning_vertex>',
         `#include <skinning_vertex>\n transformed += normalize(objectNormal) * ${ow.toFixed(4)};`);
@@ -376,7 +378,7 @@ export class Shimeji {
     try { els = [...document.querySelectorAll(sels.join(','))]; } catch { return null; }
     els = els.filter((e) => {
       const r = e.getBoundingClientRect();
-      return r.width > this.W * 0.5 && r.top > this.ceil + this.ppm * 1.0 && r.top < this.floor - this.ppm * 0.4 &&
+      return r.width > this.W * 0.3 && r.top > this.ceil + this.ppm * 1.0 && r.top < this.floor - this.ppm * 0.4 &&
         r.right > 40 && r.left < this.right - 40 && getComputedStyle(e).visibility !== 'hidden';
     });
     return els.length ? els[Math.floor(Math.random() * els.length)] : null;
@@ -405,13 +407,15 @@ export class Shimeji {
       [8, () => this._idle()],
       [9, () => this._emote()],
     ];
-    if (this.opts.perches.length) opts.push([8, () => this._goPerch()]); else opts.push([6, () => this._act('Sit_Swing', rnd(6, 12))]);
+    if (this.opts.perches.length) opts.push([20, () => this._goPerch()]); else opts.push([6, () => this._act('Sit_Swing', rnd(6, 12))]);
     const total = opts.reduce((a, o) => a + o[0], 0);
     let r = Math.random() * total;
     for (const o of opts) { r -= o[0]; if (r < 0) { o[1](); return; } }
   }
   _atEdge() {
     const r = Math.random(), right = this.dir > 0, pp = this.ppm;
+    // Com o botão "voltar ao topo" visível, o lado direito é dele: o personagem só dá meia-volta ali.
+    if (right && this._bd && this._bd.lane) { this.dir = -1; return; }
     if (r < 0.35 || this.forceEdge) {
       this.forceEdge = false;
       this.mode = right ? 'wall_r' : 'wall_l';
@@ -449,7 +453,7 @@ export class Shimeji {
   _update(dt) {
     this.t += dt;
     const a = this.anchor, o = this.opts, m = 0.3 * this.ppm;
-    if (this.mode === 'wall_r' && this.state !== S.DRAG) a.x = this.right - 0.18 * this.ppm;
+    if (this.mode === 'wall_r' && this.state !== S.DRAG) a.x = this.right - (this._bd && this._bd.lane ? 0.34 : 0.18) * this.ppm;
     if (this.mode === 'wall_l' && this.state !== S.DRAG) a.x = this.left + 0.18 * this.ppm;
     switch (this.state) {
       case S.IDLE: if (this.t > this.dur) { if (this.pendingClickEmote) { this.pendingClickEmote = false; this._emote(); } else this._nextGround(); } break;
@@ -468,6 +472,10 @@ export class Shimeji {
           if (!this.perchEl.isConnected || r.top < this.ceil + this.ppm || r.top > this.floor - this.ppm * 0.3 || r.bottom < 0) { this._fall(); break; }
           a.y = r.top + LEDGE * this.ppm;
           a.x = clamp(a.x, r.left + 20, Math.max(r.right - 20, r.left + 21));
+        }
+        if (this.perchEl && this.opts.onPerchTick) {
+          this._pt = (this._pt || 0) + dt;
+          if (this._pt > 2.4) { this._pt = 0; try { this.opts.onPerchTick(this.perchEl); } catch (e) { /* ignora */ } }
         }
         if (this.t > this.dur) { if (this.perchEl) this._fall(); else this._idle(); }
         break;
@@ -495,7 +503,10 @@ export class Shimeji {
           a.y = this.jumpFrom.y + (this.jumpTo.y - this.jumpFrom.y) * u - 4 * this.jumpH * u * (1 - u);
           if (u >= 1) {
             a.x = this.jumpTo.x; a.y = this.jumpTo.y;
-            if (this.pendingPerch) { this.perchEl = this.pendingPerch; this.pendingPerch = null; this._act('Sit_Swing', rnd(6, 12)); }
+            if (this.pendingPerch) {
+              this.perchEl = this.pendingPerch; this.pendingPerch = null; this._pt = 0; this._act('Sit_Swing', rnd(7, 13));
+              if (this.opts.onPerch) { try { this.opts.onPerch(this.perchEl); } catch (e) { /* ignora */ } }
+            }
             else this._enter(S.LAND, 'Land');
           }
         }
@@ -578,7 +589,7 @@ export class Shimeji {
         g.timer = rnd(0.04, 0.12); g.on = Math.random() > 0.35; g.vis = Math.random() > 0.15;
         g.j = Math.random() < 0.4 ? { x: rnd(-7, 7), y: rnd(-3, 3) } : { x: 0, y: 0 };
       }
-      on = g.on; this.model.visible = g.vis; this.glitch.jit = g.j || this.glitch.jit;
+      on = g.on; this.glitch.jit = g.j || this.glitch.jit;   // só treme; nunca some
     }
     for (const m of this.neon) {
       if (on) m.color.setRGB(p, 0.13 * p, 0.09 * p, THREE.SRGBColorSpace); else m.color.setRGB(0.05, 0, 0, THREE.SRGBColorSpace);

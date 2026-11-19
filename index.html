@@ -816,7 +816,9 @@ model: new URL('./assets/MESTRE.glb', document.baseURI).href,
 height: vw < 640 ? 150 : 210,
 zIndex: 18,
 menu: false,
-perches: ['.mm-card'],
+perches: ['.mm-card', 'h1', 'h2', '.mm-chip', '.mm-step-ic'],
+onPerch: (el) => { if (this._fx) this._fx.perch(el); },
+onPerchTick: (el) => { if (this._fx) this._fx.stomp(el); },
 host: { bounds: () => this.bounds(), paused: () => !!(this._dlg && this._dlg.open) },
 onEnter: (n) => this.onMascot(n),
 onClick: () => this.say(this.nextPhrase(), true),
@@ -864,8 +866,10 @@ if (this._hdr) { const hb = this._hdr.getBoundingClientRect(); if (hb.bottom > 0
 let floor = vh;
 const sb = document.querySelector('.mm-sbar.on');
 if (sb) { const r = sb.getBoundingClientRect(); if (r.height > 0 && r.top < vh) floor = Math.min(floor, Math.round(r.top) - 2); }
-const lane = st.topOn ? (vw < 768 ? 64 : 76) : 0;
-return { top: top, floor: floor, right: vw - lane };
+let right = vw, lane = false;
+const tb = document.querySelector('.mm-totop.on');
+if (tb) { const r = tb.getBoundingClientRect(); if (r.width > 0) { right = Math.min(vw, Math.round(r.left) - 8); lane = true; } }
+return { top: top, floor: floor, right: right, lane: lane };
 }
 positionBubble() {
 const el = this._bub;

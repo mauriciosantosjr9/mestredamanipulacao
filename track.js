@@ -73,11 +73,9 @@
       device: device, browser: browser, os: os, screen: screen.width + 'x' + screen.height,
       lang: (navigator.language || '').slice(0, 12), tz: tz.slice(0, 40), path: location.pathname.slice(0, 120) });
     try {
-      fetch(C.supabaseUrl.replace(/\/$/, '') + '/rest/v1/events', {
-        method: 'POST', keepalive: true,
-        headers: { 'Content-Type': 'application/json', apikey: C.supabaseKey, Authorization: 'Bearer ' + C.supabaseKey, Prefer: 'return=minimal' },
-        body: body
-      }).catch(function () {});
+      var h = { 'Content-Type': 'application/json', apikey: C.supabaseKey, Prefer: 'return=minimal' };
+      if (C.supabaseKey.indexOf('sb_') !== 0) h.Authorization = 'Bearer ' + C.supabaseKey;   // chaves "sb_publishable_" não são JWT
+      fetch(C.supabaseUrl.replace(/\/$/, '') + '/rest/v1/events', { method: 'POST', keepalive: true, headers: h, body: body }).catch(function () {});
     } catch (e) { /* ignora */ }
   }
 

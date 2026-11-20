@@ -1,0 +1,35 @@
+# Painel de administração — como ativar (5 minutos)
+
+O painel fica em `admin.html` (ex.: `https://SEU-SITE/admin.html`). Só quem entra com o **seu e-mail e senha** vê os dados.
+Para ver como ele é antes de configurar: `admin.html?demo=1` (dados fictícios).
+
+## Passo a passo
+1. **Supabase (gratuito):** crie conta em https://supabase.com e um projeto novo (guarde a senha do banco).
+2. **Tabela e segurança:** abra `supabase-setup.sql`, troque `SEU_EMAIL_AQUI` pelo seu e-mail, cole tudo em *SQL Editor → New query* e clique **Run**.
+3. **Seu usuário:** *Authentication → Users → Add user*, com o mesmo e-mail e uma senha forte.
+   Depois, em *Sign In / Providers*, **desative "Allow new users to sign up"** (ninguém mais consegue criar conta).
+4. **Chaves:** *Project Settings → API*. Copie a **Project URL** e a chave **anon public** para `config.js`.
+5. Publique de novo (GitHub). Pronto: o site passa a registrar os acessos e o painel pede seu login.
+
+## Segurança
+- Os visitantes só conseguem **gravar** eventos curtos e válidos. Ninguém lê, altera ou apaga nada sem o seu login.
+- Os dados só são liberados para o usuário logado com o **e-mail exato** colocado no SQL.
+- A chave `anon` no `config.js` é pública por natureza; a proteção real é o login + as regras do banco.
+- Suas próprias visitas **não contam** (ao entrar no painel, o navegador é marcado como "dono").
+
+## O que é medido (anônimo: sem cookies, sem IP, sem nome/telefone)
+- **Origem:** TikTok, Instagram, Kwai, YouTube/Shorts, Google, Facebook, WhatsApp, Telegram ou Direto.
+- **Visita, rolagem (25/50/75/95%), tempo na página, aparelho e navegador.**
+- **Cliques nos botões de compra** (qual botão: topo, card da oferta, barra fixa, final…) e **ida ao checkout** (botão do diálogo "Ir para o pagamento seguro").
+- Os cliques de compra repassam a origem para a Kiwify (`utm_source`, `utm_medium`, `utm_campaign`, `src`).
+  As **vendas confirmadas** continuam no painel da Kiwify; aqui você vê a intenção de compra.
+
+## Como a origem é descoberta
+1. Pelo link com `?utm_source=` (o jeito mais exato). O painel gera os links prontos em **"Links para cada rede"**:
+   cole um em cada bio/descrição (TikTok, Instagram, Kwai, Shorts).
+2. Se não houver, pelo site de onde a pessoa veio (referrer) ou pelo navegador interno do app (TikTok/Instagram/Kwai).
+3. Sem nenhum sinal: **Direto**.
+
+## Observações
+- Aviso de privacidade (LGPD): como os dados são anônimos, basta citar no rodapé/política que o site mede acessos de forma agregada.
+- O plano gratuito do Supabase pausa projetos sem uso por semanas; basta reativar no painel deles.

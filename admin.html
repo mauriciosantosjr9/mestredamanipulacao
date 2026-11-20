@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="theme-color" content="#070707">
+<title>Painel — Mestre da Manipulação</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<!-- 1) Configuração ainda não feita -->
+<section id="setup" class="gate" hidden>
+  <div class="gate-card wide">
+    <h1 class="logo">PAINEL <span>·</span> MESTRE DA MANIPULAÇÃO</h1>
+    <p class="muted">Falta só conectar o banco de dados (Supabase, gratuito). Leva uns 5 minutos:</p>
+    <ol class="steps">
+      <li>Crie uma conta em <b>supabase.com</b> e um projeto novo (guarde a senha do banco).</li>
+      <li>Em <b>SQL Editor</b>, cole o conteúdo de <code>supabase-setup.sql</code> (troque <code>SEU_EMAIL_AQUI</code> pelo seu e-mail) e clique em <b>Run</b>.</li>
+      <li>Em <b>Authentication → Users → Add user</b>, crie o seu usuário (o mesmo e-mail e uma senha forte). Em <b>Sign In / Providers</b>, desative "Allow new users to sign up".</li>
+      <li>Em <b>Project Settings → API</b>, copie a <b>Project URL</b> e a chave <b>anon public</b> para o arquivo <code>config.js</code>.</li>
+      <li>Publique de novo. Pronto: o painel passa a pedir seu login.</li>
+    </ol>
+    <p class="muted">Quer ver como o painel fica antes? <a href="?demo=1" class="link">Abrir com dados de demonstração</a></p>
+  </div>
+</section>
+
+<!-- 2) Login -->
+<section id="login" class="gate" hidden>
+  <form id="loginForm" class="gate-card" autocomplete="on">
+    <h1 class="logo">PAINEL <span>·</span> ACESSO RESTRITO</h1>
+    <label>E-mail<input id="email" type="email" autocomplete="username" required></label>
+    <label>Senha<input id="senha" type="password" autocomplete="current-password" required></label>
+    <button class="btn primary" type="submit" id="loginBtn">Entrar</button>
+    <p id="loginErr" class="err" role="alert" hidden></p>
+  </form>
+</section>
+
+<!-- 3) Painel -->
+<div id="app" hidden>
+  <div id="demoBanner" class="demo" hidden>MODO DEMONSTRAÇÃO — dados fictícios, nada aqui é real.</div>
+  <header class="top">
+    <div class="brand">
+      <svg width="34" height="30" viewBox="0 0 26 22" fill="none" stroke="#fff" stroke-width="1.8" aria-hidden="true"><path d="M2 20V3l5.5 9L13 3l5.5 9L24 3v17"/><path d="M8.5 20v-5"/><path d="M17.5 20v-5"/></svg>
+      <div><strong>PAINEL</strong><small>Mestre da Manipulação</small></div>
+    </div>
+    <div class="live" title="Visitantes ativos nos últimos 5 minutos"><i></i><span id="liveN">0</span> online agora</div>
+    <div class="tools">
+      <div class="seg" id="period" role="tablist" aria-label="Período">
+        <button data-p="today" role="tab">Hoje</button>
+        <button data-p="7" role="tab" class="on">7 dias</button>
+        <button data-p="30" role="tab">30 dias</button>
+        <button data-p="all" role="tab">Tudo</button>
+      </div>
+      <button class="btn ghost" id="refresh" title="Atualizar agora">↻ Atualizar</button>
+      <button class="btn ghost" id="csv" title="Baixar tabela em CSV">⤓ CSV</button>
+      <button class="btn ghost" id="logout">Sair</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="filterBar" class="filterbar" hidden></div>
+    <section class="kpis" id="kpis"></section>
+
+    <section class="grid">
+      <article class="card span2">
+        <div class="card-h">
+          <h2>Fonte do tráfego</h2>
+          <div class="seg small" id="metric">
+            <button data-m="sessions" class="on">Visitas</button>
+            <button data-m="cta">Cliques em comprar</button>
+            <button data-m="checkout">Foram ao checkout</button>
+          </div>
+        </div>
+        <div class="donut-wrap">
+          <div id="donutSrc" class="donut-box"></div>
+          <ul id="legendSrc" class="legend"></ul>
+        </div>
+      </article>
+
+      <article class="card span2">
+        <div class="card-h"><h2>Evolução por dia</h2>
+          <div class="keys"><span><i style="background:#E50914"></i>Visitas</span><span><i style="background:#fff"></i>Cliques em comprar</span><span><i style="background:#2ECC71"></i>Checkout</span></div>
+        </div>
+        <div id="lineChart" class="line-box"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-h"><h2>Funil</h2></div>
+        <div id="funnel" class="funnel"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-h"><h2>Botões mais clicados</h2></div>
+        <div id="buttons" class="bars"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-h"><h2>Dispositivos</h2></div>
+        <div class="donut-wrap small">
+          <div id="donutDev" class="donut-box small"></div>
+          <ul id="legendDev" class="legend"></ul>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-h"><h2>Links para cada rede</h2></div>
+        <p class="muted small-t">Use estes links na bio/descrição de cada rede. Assim o painel sabe exatamente de onde veio cada visita (e a Kiwify também recebe a origem).</p>
+        <div id="links" class="links"></div>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="card-h wrap">
+        <h2>Acessos detalhados</h2>
+        <div class="row">
+          <input id="q" type="search" placeholder="Buscar fonte, campanha, aparelho…" aria-label="Buscar">
+          <select id="onlyAct" aria-label="Filtrar por ação">
+            <option value="">Todas as ações</option>
+            <option value="checkout">Foram ao checkout</option>
+            <option value="cta">Clicaram em comprar</option>
+            <option value="none">Só visitaram</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="tbl">
+          <thead><tr><th>Quando</th><th>Fonte</th><th>Campanha</th><th>Aparelho</th><th>Rolagem</th><th>Tempo</th><th>Ação</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pager"><button class="btn ghost" id="prev">‹ Anterior</button><span id="pageInfo"></span><button class="btn ghost" id="next">Próxima ›</button></div>
+    </section>
+    <p class="foot muted">Dados anônimos (sem cookies, sem IP). Cliques no checkout indicam intenção de compra; as vendas confirmadas continuam no painel da Kiwify.</p>
+  </main>
+</div>
+
+<div id="tip" class="tip" hidden></div>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

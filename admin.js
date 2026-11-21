@@ -23,7 +23,7 @@
     faq: 'Garantia / FAQ', cta_final: 'Chamada final', dialogo: 'Pagamento (diálogo)' };
   const DEV = { mobile: ['Celular', '#E50914'], desktop: ['Computador', '#B388FF'], tablet: ['Tablet', '#FFD54F'] };
 
-  const state = { sb: null, demo: false, period: '7', metric: 'sessions', src: null, events: [], sessions: [], page: 0, timer: 0, loading: false };
+  const state = { sb: null, demo: false, period: '7', metric: 'sessions', src: null, events: [], sessions: [], prev: [], all: [], maxId: 0, since: 0, page: 0, timer: 0, loading: false, first: true };
   const PAGE = 20;
 
   // ------------------------------------------------------------------ telas
@@ -31,7 +31,7 @@
 
   async function boot() {
     state.demo = new URLSearchParams(location.search).get('demo') === '1';
-    if (state.demo) { show('app'); $('#demoBanner').hidden = false; wire(); load(); return; }
+    if (state.demo) { show('app'); $('#demoBanner').hidden = false; wire(); initAssistant(); load(); state.timer = setInterval(poll, 12000); return; }
     if (!C.supabaseUrl || !C.supabaseKey || !window.supabase) { show('setup'); return; }
     state.sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true } });
     const { data } = await state.sb.auth.getSession();
@@ -49,9 +49,23 @@
 
   function enter() {
     try { localStorage.setItem('mm-owner', '1'); } catch (e) { /* ignora */ }   // suas visitas não entram nas estatísticas
-    show('app'); wire(); load();
+    show('app'); wire(); initAssistant(); load();
     clearInterval(state.timer);
-    state.timer = setInterval(() => { if (!document.hidden) load(true); }, 30000);
+    state.timer = setInterval(poll, 15000);   // novos eventos a cada 15 s (só o que chegou depois)
+  }
+
+  function initAssistant() {
+    if (!window.MestreAI) return;
+    window.MestreAI.init({
+      state, demo: state.demo,
+      h: { esc, fmt, pct, pctS, srcLabel, srcColor, BTN, DEV, SRC: Object.keys(SRC) },
+      act: {
+        setPeriod: (p) => { const b = $('#period button[data-p="' + p + '"]'); if (b) b.click(); },
+        setSrc: (k) => setSrc(k), exportCsv, refresh: () => load(),
+        focus: (sel) => { const el = $(sel); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); },
+        link: async (k) => { const u = new URL('./', location.href).href + '?utm_source=' + k + '&utm_medium=bio'; try { await navigator.clipboard.writeText(u); return true; } catch (e) { return false; } }
+      }
+    });
   }
 
   let wired = false;
@@ -77,9 +91,10 @@
     return new Date(Date.now() - Number(state.period) * 864e5);
   }
 
-  async function fetchEvents() {
-    if (state.demo) return demoEvents();
-    const since = sinceDate().toISOString(), out = [];
+  // Busca o período escolhido + o período anterior do mesmo tamanho (para o assistente comparar tendências).
+  async function fetchEvents(from) {
+    if (state.demo) return demoEvents(from);
+    const since = from.toISOString(), out = [];
     for (let p = 0; p < 40; p++) {
       const { data, error } = await state.sb.from('events').select('*').gte('created_at', since).order('created_at', { ascending: false }).range(p * 1000, p * 1000 + 999);
       if (error) throw error;
@@ -89,17 +104,43 @@
     return out;
   }
 
+  function recompute() {
+    state.all = buildSessions(state.events);
+    state.sessions = state.all.filter((s) => s.t0 >= state.since);
+    state.prev = state.period === 'all' ? [] : state.all.filter((s) => s.t0 < state.since);
+    state.maxId = state.events.reduce((m, e) => Math.max(m, Number(e.id) || 0), state.maxId);
+  }
+
   async function load(silent) {
     if (state.loading) return; state.loading = true;
     if (!silent) skeleton();
     try {
-      state.events = await fetchEvents();
-      state.sessions = buildSessions(state.events);
+      const since = sinceDate(); state.since = since.getTime();
+      const from = state.period === 'all' ? since : new Date(since.getTime() - (Date.now() - since.getTime()));
+      state.events = await fetchEvents(from);
+      recompute();
       render(!silent);
     } catch (err) {
       $('#kpis').innerHTML = '<div class="card span2"><h2>Não foi possível carregar</h2><p class="muted">' + esc(err && err.message ? err.message : err) + '</p><p class="muted">Confira se o <code>supabase-setup.sql</code> foi executado com o seu e-mail e se você entrou com esse mesmo e-mail.</p></div>';
     }
     state.loading = false;
+  }
+
+  // Atualização incremental: busca só os eventos novos (id maior que o último visto) e avisa o assistente.
+  async function poll() {
+    if (state.loading || document.hidden) return;
+    let fresh = [];
+    try {
+      if (state.demo) fresh = demoNew();
+      else {
+        const { data, error } = await state.sb.from('events').select('*').gt('id', state.maxId).order('id', { ascending: true }).limit(1000);
+        if (error) throw error; fresh = data || [];
+      }
+    } catch (e) { return; }
+    if (!fresh.length) { updateLive(); return; }
+    state.events = fresh.concat(state.events);
+    recompute(); render(false);
+    if (window.MestreAI) window.MestreAI.onNewEvents(fresh);
   }
 
   function buildSessions(events) {
@@ -123,10 +164,11 @@
   // ------------------------------------------------------------------ desenho
   function skeleton() { $('#kpis').innerHTML = '<div class="kpi"><div class="skel" style="height:60px"></div></div>'.repeat(5); }
 
+  function updateLive() { $('#liveN').textContent = state.all.filter((s) => Date.now() - s.t1 < 5 * 60e3).length; }
+
   function render(animate) {
     const v = view();
-    const online = state.sessions.filter((s) => Date.now() - s.t1 < 5 * 60e3).length;
-    $('#liveN').textContent = online;
+    updateLive();
     const fb = $('#filterBar');
     fb.hidden = !state.src;
     if (state.src) fb.innerHTML = '<span>Filtrando por <b>' + esc(srcLabel(state.src)) + '</b></span><button class="btn ghost" type="button">Limpar filtro ✕</button>';
@@ -143,7 +185,33 @@
     $('#kpis').innerHTML = kp.map((k, i) => '<div class="kpi ' + k[3] + '" style="animation-delay:' + i * 60 + 'ms"><small>' + k[0] + '</small><b data-to="' + k[1] + '">0</b><em>' + esc(k[2] || ' ') + '</em></div>').join('');
     $$('#kpis b').forEach((b, i) => count(b, kp[i][1], i === 4 ? '%' : ''));
 
-    drawSources(); drawLine(); drawFunnel(); drawButtons(); drawDevices(); drawLinks(); drawTable();
+    drawSources(); drawLine(); drawFunnel(); drawButtons(); drawDevices(); drawLinks(); drawHours(); drawWeek(); drawTable();
+    if (window.MestreAI) window.MestreAI.update(state.first); state.first = false;
+  }
+
+  // --- melhores horários e dias da semana ------------------------------------------
+  function bars(box, labels, a, b, bestIdx, unit) {
+    const max = Math.max(1, Math.max.apply(null, a));
+    box.innerHTML = '<div class="bars-v">' + a.map((val, i) => '<div class="bv' + (i === bestIdx && val ? ' best' : '') + '" data-i="' + i + '"><div class="bcol"><i class="b1" style="height:' + (val / max) * 100 + '%"></i><i class="b2" style="height:' + (b[i] / max) * 100 + '%"></i></div><span>' + labels[i] + '</span></div>').join('') + '</div>';
+    $$('.bv', box).forEach((el) => {
+      const i = +el.dataset.i;
+      el.addEventListener('mousemove', (e) => tip(e, '<b>' + esc(labels[i]) + (unit || '') + '</b><br>Visitas: <b>' + a[i] + '</b><br>Foram ao checkout: <b>' + b[i] + '</b>'));
+      el.addEventListener('mouseleave', () => tip(null));
+    });
+  }
+  function drawHours() {
+    const v = view(), a = Array(24).fill(0), b = Array(24).fill(0);
+    v.forEach((s) => { const h = new Date(s.t0).getHours(); a[h]++; if (s.checkout) b[h]++; });
+    let best = -1, bv = 0; a.forEach((x, i) => { if (x > bv) { bv = x; best = i; } });
+    bars($('#hoursChart'), a.map((_, i) => String(i).padStart(2, '0')), a, b, best, 'h');
+    $('#hoursBest').textContent = best >= 0 ? 'Pico: ' + String(best).padStart(2, '0') + 'h–' + String((best + 1) % 24).padStart(2, '0') + 'h (' + bv + ' visitas)' : 'Sem dados ainda';
+  }
+  function drawWeek() {
+    const v = view(), a = Array(7).fill(0), b = Array(7).fill(0), names = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    v.forEach((s) => { const d = new Date(s.t0).getDay(); a[d]++; if (s.checkout) b[d]++; });
+    let best = -1, bv = 0; a.forEach((x, i) => { if (x > bv) { bv = x; best = i; } });
+    bars($('#weekChart'), names, a, b, best, '');
+    $('#weekBest').textContent = best >= 0 ? 'Melhor dia: ' + names[best] + ' (' + bv + ' visitas)' : 'Sem dados ainda';
   }
 
   function count(el, to, suf) {
@@ -304,22 +372,38 @@
   }
 
   // ------------------------------------------------------------------ demonstração (dados fictícios)
-  function demoEvents() {
+  let demoId = 0;
+  function demoEvents(from) {
     let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
     const srcs = [['tiktok', 46], ['instagram', 24], ['kwai', 12], ['shorts', 9], ['direto', 6], ['google', 3]];
     const devs = ['mobile', 'mobile', 'mobile', 'desktop', 'tablet'], brs = ['Chrome', 'Safari', 'TikTok', 'Instagram', 'Edge'], oss = ['Android', 'iOS', 'Windows'];
-    const days = state.period === 'today' ? 1 : state.period === 'all' ? 30 : Number(state.period), out = []; let id = 0;
-    const N = Math.round(days * (18 + rnd() * 10) + 40);
+    const hours = [1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 5, 6, 7, 6, 6, 7, 8, 9, 12, 16, 18, 16, 10, 4];   // pico à noite
+    const hourSum = hours.reduce((a, b) => a + b, 0);
+    const days = Math.max(1, Math.round((Date.now() - from.getTime()) / 864e5)), out = [];
+    const N = Math.round(days * (16 + rnd() * 8) + 40);
     for (let i = 0; i < N; i++) {
       let r = rnd() * 100, src = 'direto'; for (const s of srcs) { if ((r -= s[1]) < 0) { src = s[0]; break; } }
-      const t = Date.now() - Math.pow(rnd(), 1.3) * days * 864e5, sid = 'demo' + i, base = { sid, vid: 'v' + (i % 170), source: src, medium: src === 'direto' ? '' : 'bio', campaign: rnd() > 0.7 ? 'lancamento' : '', device: devs[Math.floor(rnd() * devs.length)], browser: brs[Math.floor(rnd() * brs.length)], os: oss[Math.floor(rnd() * oss.length)] };
-      const ev = (type, label, value, dt) => out.push(Object.assign({ id: ++id, created_at: new Date(t + (dt || 0) * 1000).toISOString(), type, label: label || null, value: value == null ? null : value }, base));
-      ev('pageview'); const sc = [25, 50, 75, 95].filter((m) => rnd() < 1 - m / 130); sc.forEach((m, k) => ev('scroll', null, m, 6 + k * 9));
-      if (rnd() < 0.34) { const l = ['hero', 'card_oferta', 'barra_fixa', 'cabecalho', 'cta_final'][Math.floor(rnd() * 5)]; ev('cta_click', l, null, 40); if (rnd() < 0.5) ev('checkout_click', 'dialogo', null, 48); }
-      ev('leave', null, Math.round(8 + rnd() * 120), 90);
+      let hr = rnd() * hourSum, h = 0; for (; h < 23; h++) { if ((hr -= hours[h]) < 0) break; }
+      const day = new Date(Date.now() - Math.floor(Math.pow(rnd(), 1.15) * days) * 864e5); day.setHours(h, Math.floor(rnd() * 60), Math.floor(rnd() * 60), 0);
+      let t = day.getTime(); if (t > Date.now() - 6e4) t = Date.now() - 6e4 - rnd() * 36e5;
+      demoOne(out, rnd, 'demo' + i, 'v' + (i % 170), src, devs, brs, oss, t, src === 'tiktok' ? 0.22 : src === 'kwai' ? 0.5 : 0.36);
     }
     return out;
   }
-
+  function demoOne(out, rnd, sid, vid, src, devs, brs, oss, t, ctaRate) {
+    const base = { sid, vid, source: src, medium: src === 'direto' ? '' : 'bio', campaign: rnd() > 0.7 ? 'lancamento' : '', device: devs[Math.floor(rnd() * devs.length)], browser: brs[Math.floor(rnd() * brs.length)], os: oss[Math.floor(rnd() * oss.length)] };
+    const ev = (type, label, value, dt) => out.push(Object.assign({ id: ++demoId, created_at: new Date(t + (dt || 0) * 1000).toISOString(), type, label: label || null, value: value == null ? null : value }, base));
+    ev('pageview'); [25, 50, 75, 95].filter((m) => rnd() < 1 - m / 130).forEach((m, k) => ev('scroll', null, m, 6 + k * 9));
+    if (rnd() < ctaRate) { ev('cta_click', ['hero', 'card_oferta', 'barra_fixa', 'cabecalho', 'cta_final'][Math.floor(rnd() * 5)], null, 40); if (rnd() < 0.5) ev('checkout_click', 'dialogo', null, 48); }
+    ev('leave', null, Math.round(8 + rnd() * 120), 90);
+  }
+  // demonstração "ao vivo": de vez em quando chega uma visita nova (para ver os alertas do assistente)
+  function demoNew() {
+    if (Math.random() > 0.7) return [];
+    const out = [], srcs = ['tiktok', 'tiktok', 'instagram', 'kwai', 'shorts'];
+    const src = srcs[Math.floor(Math.random() * srcs.length)];
+    demoOne(out, Math.random, 'live' + Date.now(), 'lv' + Date.now(), src, ['mobile'], ['TikTok', 'Instagram'], ['Android', 'iOS'], Date.now(), 0.9);
+    return out.map((e) => Object.assign(e, { created_at: new Date().toISOString() }));
+  }
   boot();
 })();

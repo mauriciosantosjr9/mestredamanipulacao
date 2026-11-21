@@ -33,3 +33,20 @@ Para ver como ele é antes de configurar: `admin.html?demo=1` (dados fictícios)
 ## Observações
 - Aviso de privacidade (LGPD): como os dados são anônimos, basta citar no rodapé/política que o site mede acessos de forma agregada.
 - O plano gratuito do Supabase pausa projetos sem uso por semanas; basta reativar no painel deles.
+
+## Assistente "Mestre IA" (o mascote do painel)
+O mascote 3D vive no painel e vira seu assistente. Clique nele (ou em **✦ Mestre IA** no topo) para abrir.
+Tudo roda **no seu navegador**: nenhum dado do painel é enviado a terceiros e não há custo de IA.
+É um motor de análise em português (não um modelo de linguagem): ele calcula em cima dos seus números.
+
+- **Resumo do dia:** visitas, cliques em comprar, checkouts, comparação com o período anterior e projeção de fechamento do dia.
+- **Radar de insights:** avisa de queda ou alta de tráfego, rede que traz visita mas não vende, redes que mais convertem,
+  gente saindo antes de 25% da página, desistência na janela "Seu pedido", diferença entre celular e computador,
+  horário/dia de pico, botão campeão e muita visita "Direto" (sem origem). Cada alerta traz uma sugestão e um botão que leva ao gráfico.
+- **Ao vivo (a cada 15 s):** quando alguém clica em comprar ou vai ao checkout, o mascote comemora, mostra um balão,
+  o botão ganha um ponto verde e a aba pisca no título. Dá para ativar "Avisar no navegador" (notificação com a aba em segundo plano).
+- **Perguntas em português:** "qual a melhor fonte?", "melhor horário para postar", "compare tiktok e instagram",
+  "onde estou perdendo gente?", "qual a conversão?", "o que devo fazer agora?", "quantos online?".
+- **Comandos:** "mostrar 30 dias", "filtrar instagram", "limpar filtro", "exportar csv", "link do kwai" (copia o link).
+- **Novos gráficos:** *Melhores horários* e *Dias da semana*.
+- Dá para desligar o mascote solto na tela em "Mascote livre na tela".

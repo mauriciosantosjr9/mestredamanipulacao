@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="admin.css">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
 
@@ -112,7 +113,17 @@
         <p class="muted small-t">Use estes links na bio/descrição de cada rede. Assim o painel sabe exatamente de onde veio cada visita (e a Kiwify também recebe a origem).</p>
         <div id="links" class="links"></div>
       </article>
-    </section>
+      <article class="card span2">
+        <div class="card-h"><h2>Melhores horários</h2><small id="hoursBest" class="muted"></small></div>
+        <div id="hoursChart"></div>
+        <div class="keys sm"><span><i style="background:#E50914"></i>Visitas</span><span><i style="background:#2ECC71"></i>Foram ao checkout</span></div>
+      </article>
+
+      <article class="card span2">
+        <div class="card-h"><h2>Dias da semana</h2><small id="weekBest" class="muted"></small></div>
+        <div id="weekChart"></div>
+        <div class="keys sm"><span><i style="background:#E50914"></i>Visitas</span><span><i style="background:#2ECC71"></i>Foram ao checkout</span></div>
+      </article>    </section>
 
     <section class="card">
       <div class="card-h wrap">
@@ -142,6 +153,7 @@
 <div id="tip" class="tip" hidden></div>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="assistente.js"></script>
 <script src="admin.js"></script>
 </body>
 </html>
